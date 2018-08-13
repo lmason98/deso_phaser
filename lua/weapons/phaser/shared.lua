@@ -7,7 +7,7 @@ SWEP.Spawnable = true
 SWEP.AdminOnly = false
 
 /*----- Cfg -----*/
-SWEP.phaseLength = 25  -- How long a prop should stay phased
+SWEP.phaseLength = 20  -- How long a prop should stay phased
 SWEP.holdLength = 15  -- How long you have to look at the prop to phase
 /*---------------*/
 
@@ -80,7 +80,7 @@ function SWEP:PrimaryAttack()
 		local selfPos = self.Owner:GetPos()
 		dist = selfPos:Distance(hitPos)
 
-		if (dist < 100 && ent:GetClass() == "prop_physics" && !deso.phase.IsInGround(ent) && !ent.phased && !self:GetIsPhasing()) then
+		if (dist < 100 && ent:GetClass() == "prop_physics" && !ent.phased && !self:GetIsPhasing()) then
 			self.Owner:SetWalkSpeed(usingWalk)
 			self.Owner:SetRunSpeed(usingRun)
 
