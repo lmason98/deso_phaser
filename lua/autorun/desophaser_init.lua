@@ -16,3 +16,14 @@ if (CLIENT) then
 	include "desophaser/client/cl_fonts.lua"
 	include "desophaser/client/cl_desophaser.lua"
 end
+
+game.AddAmmoType( {
+	name = "phase_bomb",
+	dmgtype = DMG_BLAST,
+	tracer = TRACER_LINE,
+	plydmg = 0,
+	npcdmg = 0,
+	force = 1000,
+	minsplash = 10,
+	maxsplash = 5
+} )

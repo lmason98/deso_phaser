@@ -2,13 +2,13 @@ AddCSLuaFile()
 
 SWEP.PrintName = "Phaser"
 SWEP.Author = "MrRalgoman"
-SWEP.Instructions = "Left click to Phase a propw!"
+SWEP.Instructions = "Left click to Phase a prop!"
 SWEP.Spawnable = true
 SWEP.AdminOnly = false
 
 /*----- Cfg -----*/
-SWEP.phaseLength = 5  -- How long a prop should stay phased
-SWEP.holdLength = 2  -- How long you have to look at the prop to phase
+SWEP.phaseLength = 25  -- How long a prop should stay phased
+SWEP.holdLength = 15  -- How long you have to look at the prop to phase
 /*---------------*/
 
 SWEP.Category = "DesoWeps"
@@ -20,7 +20,7 @@ SWEP.AutoSwitchFrom = false
 SWEP.Slot = 4
 SWEP.SlotPos = 1
 SWEP.DrawAmmo = false
-SWEP.DrawCrosshair = true
+SWEP.DrawCrosshair = false
 SWEP.ViewModel = "models/weapons/c_rpg.mdl"
 SWEP.WorldModel = "models/weapons/w_rocket_launcher.mdl"
 SWEP.HoldType = "rpg"
@@ -38,7 +38,10 @@ SWEP.Secondary.DefaultClip = -1
 SWEP.Secondary.Automatic = false
 SWEP.Secondary.Ammo	= "none"
 
-local defaultRun, defaultWalk
+local defaultRun, defaultWalk = 240, 160
+local usingRun, usingWalk = 80, 80
+
+local bloopSound = Sound("buttons/blip1.wav")
 
 /*---------------------------------------------------------
    Name: SWEP:SetupDataTables()
@@ -78,10 +81,8 @@ function SWEP:PrimaryAttack()
 		dist = selfPos:Distance(hitPos)
 
 		if (dist < 100 && ent:GetClass() == "prop_physics" && !deso.phase.IsInGround(ent) && !ent.phased && !self:GetIsPhasing()) then
-			defaultRun = self.Owner:GetRunSpeed()
-			defaultWalk = self.Owner:GetWalkSpeed()
-			self.Owner:SetWalkSpeed(defaultWalk - 150)
-			self.Owner:SetRunSpeed(defaultRun - 250)
+			self.Owner:SetWalkSpeed(usingWalk)
+			self.Owner:SetRunSpeed(usingRun)
 
 			self.Weapon:SendWeaponAnim(ACT_VM_LOWERED_TO_IDLE)
 
@@ -103,8 +104,10 @@ end
 
 /*---------------------------------------------------------
    Name: SWEP:Think()
+   Desc: Handles sparks/bloop sound and etermines if phase 
+   		 was fail/success
 ---------------------------------------------------------*/
-local sparkTime
+local sparkTime, bloopTime
 
 function SWEP:Think()
 	if (self:GetIsPhasing()) then
@@ -119,17 +122,27 @@ function SWEP:Think()
 				sparkTime = CurTime() + 0.5
 			end
 
+			if (!bloopTime || CurTime() >= bloopTime + 2) then
+				bloopTime = CurTime() + 1
+			end
+
 			if (CurTime() >= sparkTime) then
 				sparkTime = sparkTime + 0.5
 
 				timer.Simple(0.01, function()
 					local effect = EffectData()
-					effect:SetOrigin(self:GetPos() + self:GetAngles():Forward() * 50)
+					effect:SetOrigin(self:GetPos() + self:GetAngles():Forward() * 50 + self:GetAngles():Up() * 20)
 					effect:SetScale(1)
 					effect:SetRadius(4)
 					effect:SetMagnitude(3)
 					util.Effect("Sparks", effect)
 				end)
+			end
+
+			if (CurTime() >= bloopTime) then
+				bloopTime = bloopTime + 1
+
+				self:EmitSound(bloopSound)
 			end
 
 			if (dist > 100 || ent:GetClass() != "prop_physics" || ent.phased) then
@@ -167,7 +180,7 @@ if (CLIENT) then
 			local progress = deso.phase.CalcWidth(width, time, timeLeft)
 			local col = deso.phase.CalcColor(width, time, timeLeft)
 
-			surface.SetDrawColor(deso.col.light)
+			surface.SetDrawColor(deso.col.dark)
 			surface.DrawRect(x, y, width, height)
 
 			surface.SetDrawColor(col)
