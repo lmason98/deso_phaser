@@ -30,6 +30,7 @@ SWEP.UseHands = true
 SWEP.Primary.ClipSize = 1
 SWEP.Primary.DefaultClip = 1
 SWEP.Primary.Automatic = false
+SWEP.Primary.Sound = Sound("physics/wood/wood_box_impact_hard3.wav")
 SWEP.Primary.Ammo = "phase_bomb"
 
 SWEP.Secondary.ClipSize = -1
@@ -46,96 +47,12 @@ local reloadSound = Sound("weapons/ar2/ar2_reload.wav")
 local shootSound = Sound("physics/wood/wood_box_impact_hard3.wav")
 
 /*---------------------------------------------------------
-   Name: SWEP:SetupDataTables()
----------------------------------------------------------*/
-function SWEP:SetupDataTables()
-	self:NetworkVar("Bool", 0, "IsPhasing")
-	self:NetworkVar("Bool", 1, "IsDown")
-	self:NetworkVar("Float", 0, "PhaseStartTime")
-	self:NetworkVar("Float", 1, "PhaseEndTime")
-	self:NetworkVar("Int", 0, "WarmUp")
-end
-
-/*---------------------------------------------------------
-   Name: SWEP:Initialize()
----------------------------------------------------------*/
-function SWEP:Initialize()
-	self:SetIsPhasing(false)
-	self:SetPhaseStartTime(0)
-	self:SetPhaseEndTime(0)
-	self:SetWarmUp(self.prepareTime)
-	self:SetHoldType(self.HoldType)
-end
-
-/*---------------------------------------------------------
-   Name: SWEP:Deploy()
-   Desc: Setting weapon anim
----------------------------------------------------------*/
-function SWEP:Deploy()
-	self:SendWeaponAnim(ACT_VM_IDLE_TO_LOWERED)
-	self:SetIsDown(true)
-end
-
-/*---------------------------------------------------------
    Name: SWEP:PrimaryAttack()
    Desc: Begins warmup for the Super Phaser
 ---------------------------------------------------------*/
 function SWEP:PrimaryAttack()
-	if (!self:GetIsPhasing() && !self:GetIsDown() && self:Clip1() > 0) then
-		self:SetIsPhasing(true)
-
-		self:SetPhaseStartTime(CurTime())
-		self:SetPhaseEndTime(CurTime() + self:GetWarmUp())
-	end
-end
-
-/*---------------------------------------------------------
-   Name: SWEP:SecondaryAttack()
-   Desc: Toggles whether the super phaser is up or down
----------------------------------------------------------*/
-function SWEP:SecondaryAttack()
-	if (self:GetIsDown()) then
-		self:Raise()
-	else
-		self:Lower(true)
-	end
-end
-
-/*---------------------------------------------------------
-   Name: SWEP:Reload()
-   Desc: Handles reloading the Super Phaser
----------------------------------------------------------*/
-function SWEP:Reload()
-	if (self:Clip1() < self.Primary.ClipSize && self.Owner:GetAmmoCount(self.Primary.Ammo) > 0 && !reloadCooldown) then
-		reloadCooldown = true
-		self:SendWeaponAnim(ACT_VM_RELOAD)
-		self.Owner:RemoveAmmo(1, self:GetPrimaryAmmoType())
-
-		timer.Simple(0.5, function() self:SetClip1(1) self:EmitSound(reloadSound) end)
-		timer.Simple(2, function() self:SendWeaponAnim(ACT_VM_IDLE_TO_LOWERED) reloadCooldown = false end)
-	end
-end
-
-/*---------------------------------------------------------
-   Name: SWEP:Think()
-   Desc: Handles launching the phase grenade
----------------------------------------------------------*/
-function SWEP:Think()
-	if (self:GetIsPhasing() && self:GetPhaseEndTime() != 0) then
-		if (CurTime() >= self:GetPhaseEndTime()) then
-			self:Launch()
-		end
-
-		if (!blipTime || CurTime() >= blipTime + 2) then
-			blipTime = CurTime() + self.blipTime
-		end
-
-		if (CurTime() >= blipTime) then
-			blipTime = blipTime + self.blipTime
-
-			self:EmitSound(blipSound)
-		end
-	end
+	self:SetNextPrimaryFire( CurTime() + 0.5 )	
+	self:Shoot()
 end
 
 /*---------------------------------------------------------
@@ -169,64 +86,56 @@ function SWEP:Launch()
 	timer.Simple(0.5, function() self:SendWeaponAnim(ACT_VM_IDLE_TO_LOWERED) end)
 end
 
-/*---------------------------------------------------------
-   Name: SWEP:Raise()
-   Desc: Raises the Super Phaser
----------------------------------------------------------*/
-function SWEP:Raise()
-	if (self:GetIsDown()) then
-		self:SetIsDown(false)
-		self:SendWeaponAnim(ACT_VM_LOWERED_TO_IDLE)
-		
-		self.Owner:SetWalkSpeed(usingWalk)
-		self.Owner:SetRunSpeed(usingRun)
-	end
-end
+-- A custom function we added. When you call this the player will fire a chair!
+function SWEP:Shoot()
+	local owner = self:GetOwner()
+    print("Shoot !")
 
-/*---------------------------------------------------------
-   Name: SWEP:Lower()
-   Desc: Lowers the Super Phaser
----------------------------------------------------------*/
-function SWEP:Lower(sendAnim)
-	if (!self:GetIsDown()) then
-		self:SetIsDown(true)
-		if (sendAnim) then self:SendWeaponAnim(ACT_VM_IDLE_TO_LOWERED) end
-		self:SetIsPhasing(false)
-		self:SetPhaseStartTime(0)
-		self:SetPhaseEndTime(0)
+	-- Make sure the weapon is being held before trying to throw a chair
+	if ( not owner:IsValid() ) then return end
 
-		self.Owner:SetWalkSpeed(defaultWalk)
-		self.Owner:SetRunSpeed(defaultRun)
-	end
-end
+	-- Play the shoot sound we precached earlier!
+	self:EmitSound( self.Primary.Sound )
+ 
+	-- If we're the client then this is as much as we want to do.
+	-- We play the sound above on the client due to prediction.
+	-- ( if we didn't they would feel a ping delay during multiplayer )
+	if ( CLIENT ) then return end
 
-if (CLIENT) then
-	/*---------------------------------------------------------
-	Name: SWEP:DrawHUD()
-	Desc: Draws progress bar
-	---------------------------------------------------------*/
-	function SWEP:DrawHUD()
-		if (self:GetIsPhasing()) then
-			local w = ScrW()
-			local h = ScrH()
-			local x, y, width, height = (w / 2) - 200, (h / 2) - 30, 400, 60
-			local time =  self:GetPhaseEndTime() - self:GetPhaseStartTime()
-			local timeLeft = self:GetPhaseEndTime() - CurTime()
+	-- Create a prop_physics entity
+	local ent = ents.Create( "phase_bomb" )
 
-			local progress = deso.phase.CalcWidth(width, time, timeLeft)
-			local col = deso.phase.CalcColor(width, time, timeLeft)
+	-- Always make sure that created entities are actually created!
+	if ( not ent:IsValid() ) then return end
 
-			surface.SetDrawColor(deso.col.dark)
-			surface.DrawRect(x, y, width, height)
+	-- This is the same as owner:EyePos() + (self:GetOwner():GetAimVector() * 16)
+	-- but the vector methods prevent duplicitous objects from being created
+	-- which is faster and more memory efficient
+	-- AimVector is not directly modified as it is used again later in the function
+	local aimvec = owner:GetAimVector()
+	local pos = aimvec * 16 -- This creates a new vector object
+	pos:Add( owner:EyePos() ) -- This translates the local aimvector to world coordinates
 
-			surface.SetDrawColor(col)
-			surface.DrawRect(x, y, progress, height)
+	-- Set the position to the player's eye position plus 16 units forward.
+	ent:SetPos( pos )
 
-			surface.SetDrawColor(deso.col.outline)
-			surface.DrawOutlinedRect(x, y, width, height)
-			surface.DrawOutlinedRect(x + 1, y - 1, width - 2, height + 2)
-
-			draw.SimpleTextOutlined("Preparing", "deso_hud_reserve", w / 2, h / 2, Color(255, 255, 255), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER, 2, deso.col.outline)
-		end
-	end
+	-- Set the angles to the player'e eye angles. Then spawn it.
+	ent:SetAngles( owner:EyeAngles() )
+	ent:Spawn()
+ 
+	-- Now get the physics object. Whenever we get a physics object
+	-- we need to test to make sure its valid before using it.
+	-- If it isn't then we'll remove the entity.
+	local phys = ent:GetPhysicsObject()
+	if ( not phys:IsValid() ) then ent:Remove() return end
+ 
+	-- Now we apply the force - so the chair actually throws instead 
+	-- of just falling to the ground. You can play with this value here
+	-- to adjust how fast we throw it.
+	-- Now that this is the last use of the aimvector vector we created,
+	-- we can directly modify it instead of creating another copy
+	aimvec:Mul( 10000 )
+	aimvec:Add( VectorRand( -10, 10 ) ) -- Add a random vector with elements [-10, 10)
+	phys:ApplyForceCenter( aimvec )
+ 
 end

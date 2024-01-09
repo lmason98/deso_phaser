@@ -6,6 +6,9 @@ local ground = -203
 	Return: Bool
 -------------------------------------------*/
 function deso.phase.IsInGround(prop)
+
+	print(" is on ground :", prop:OnGround())
+
 	local top = prop:LocalToWorld(prop:OBBMaxs())
 	local bottom = prop:LocalToWorld(prop:OBBMins())
 	local height = (-top.z + bottom.z)

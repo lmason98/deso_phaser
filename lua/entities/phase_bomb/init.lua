@@ -28,6 +28,12 @@ function ENT:Initialize()
 	if (phys:IsValid()) then phys:Wake() end
 end
 
+function ENT:PhysicsCollide(colData, collider)
+    if (colData.HitEntity:GetClass() == "prop_physics") then
+        self:Detonate()
+    end
+end
+
 /*---------------------------------------------------------
    Name: ENT:Think()
    Desc: Handles phase bomb detonation
@@ -72,6 +78,7 @@ function ENT:Detonate()
 
 	for _, ent in pairs(ents.FindInSphere(self:GetPos(), self.phaseRadius)) do
 		if (ent:GetClass() == "prop_physics") then
+			print("is in ground :", deso.phase.IsInGround(ent))
 			self:PhaseProp(ent)
 		end
 	end
